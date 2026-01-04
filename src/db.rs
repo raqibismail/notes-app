@@ -18,14 +18,12 @@ pub fn setup_db() -> Result<Connection> {
     
     // 2. Create the directory if it doesn't exist
     fs::create_dir_all(&data_dir).expect("Could not create data directory");
-    
     data_dir.push("notes.db");
 
     // 3. Connect (this creates the file if it's missing)
     let conn = Connection::open(data_dir)?;
 
     // 4. Create the table using SQL
-    // We use 'TEXT' for titles and content.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS notes (
             id      INTEGER PRIMARY KEY,
@@ -33,13 +31,12 @@ pub fn setup_db() -> Result<Connection> {
             content TEXT NOT NULL,
             date    TEXT NOT NULL
         )",
-        (), // empty list of parameters
+        (),
     )?;
 
     Ok(conn)
 }
 
-// Ensure "pub" is here
 pub fn insert_note(conn: &rusqlite::Connection, title: &str, content: &str) -> rusqlite::Result<()> {
     let current_date = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     
@@ -48,4 +45,23 @@ pub fn insert_note(conn: &rusqlite::Connection, title: &str, content: &str) -> r
         (title, content, current_date),
     )?;
     Ok(())
+}
+
+pub fn get_all_notes(conn: &Connection) -> Result<Vec<Note>> {
+    let mut stmt = conn.prepare("SELECT id, title, content, date FROM notes ORDER BY id DESC")?;
+    
+    let note_iter = stmt.query_map([], |row| {
+        Ok(Note {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            content: row.get(2)?,
+            date: row.get(3)?,
+        })
+    })?;
+
+    let mut notes = Vec::new();
+    for note in note_iter {
+        notes.push(note?);
+    }
+    Ok(notes)
 }
