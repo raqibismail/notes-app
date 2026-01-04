@@ -27,6 +27,11 @@ fn main() -> gtk::glib::ExitCode {
 
         // 1. The Main Horizontal Split
         let main_layout = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        let title_entry = gtk::Entry::builder().placeholder_text("Note Title").build();
+        let text_view = gtk::TextView::builder()
+            .vexpand(true)
+            .wrap_mode(gtk::WrapMode::Word)
+            .build();
 
         // 2. Left Side: Sidebar
         let sidebar_container = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -42,6 +47,22 @@ fn main() -> gtk::glib::ExitCode {
         let list_box = gtk::ListBox::new();
         refresh_list(&list_box, &shared_conn);
         scrolled_window.set_child(Some(&list_box));
+
+        let title_entry_clone = title_entry.clone();
+        let text_view_clone = text_view.clone();
+        let conn_selection = shared_conn.clone();
+
+        list_box.connect_row_selected(move |_,row| {
+            if let Some(selected_row) = row {
+                let note_id = selected_row.widget_name().parse().unwrap_or(0);
+
+                let conn = conn_selection.lock().unwrap();
+                if let Ok(note) = db::get_note_by_id(&conn, note_id){
+                    title_entry_clone.set_text(&note.title);
+                    text_view_clone.buffer().set_text(&note.content);
+                }
+            }
+        });
 
         let btn_new = gtk::Button::with_label(" + New Note ");
         btn_new.connect_clicked(move |_| {
@@ -62,12 +83,6 @@ fn main() -> gtk::glib::ExitCode {
         editor_container.set_margin_bottom(20);
         editor_container.set_margin_start(20);
         editor_container.set_margin_end(20);
-
-        let title_entry = gtk::Entry::builder().placeholder_text("Note Title").build();
-        let text_view = gtk::TextView::builder()
-            .vexpand(true)
-            .wrap_mode(gtk::WrapMode::Word)
-            .build();
 
         let btn_save = gtk::Button::with_label("Save Note");
 
@@ -139,8 +154,14 @@ fn refresh_list(list_box: &gtk::ListBox, conn: &Arc<Mutex<rusqlite::Connection>>
             label.set_margin_bottom(10);
             label.set_margin_start(10);
             label.set_margin_end(10);
-            label.set_xalign(0.0); 
-            list_box.append(&label);
+            label.set_xalign(0.0);
+
+            let row = gtk::ListBoxRow::new();
+            row.set_child(Some(&label));
+
+            row.set_widget_name(&note.id.to_string());
+
+            list_box.append(&row);
         }
     }
 }

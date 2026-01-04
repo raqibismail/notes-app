@@ -1,7 +1,7 @@
+use chrono;
 use rusqlite::{Connection, Result};
 use std::fs;
 use std::path::PathBuf;
-use chrono;
 
 #[derive(Debug)]
 pub struct Note {
@@ -15,7 +15,7 @@ pub fn setup_db() -> Result<Connection> {
     // 1. Determine where to save the file (~/.local/share/hyprnotes/)
     let mut data_dir = dirs::data_dir().unwrap_or_else(|| PathBuf::from("./"));
     data_dir.push("hyprnotes");
-    
+
     // 2. Create the directory if it doesn't exist
     fs::create_dir_all(&data_dir).expect("Could not create data directory");
     data_dir.push("notes.db");
@@ -37,9 +37,13 @@ pub fn setup_db() -> Result<Connection> {
     Ok(conn)
 }
 
-pub fn insert_note(conn: &rusqlite::Connection, title: &str, content: &str) -> rusqlite::Result<()> {
+pub fn insert_note(
+    conn: &rusqlite::Connection,
+    title: &str,
+    content: &str,
+) -> rusqlite::Result<()> {
     let current_date = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    
+
     conn.execute(
         "INSERT INTO notes (title, content, date) VALUES (?1, ?2, ?3)",
         (title, content, current_date),
@@ -49,7 +53,7 @@ pub fn insert_note(conn: &rusqlite::Connection, title: &str, content: &str) -> r
 
 pub fn get_all_notes(conn: &Connection) -> Result<Vec<Note>> {
     let mut stmt = conn.prepare("SELECT id, title, content, date FROM notes ORDER BY id DESC")?;
-    
+
     let note_iter = stmt.query_map([], |row| {
         Ok(Note {
             id: row.get(0)?,
@@ -64,4 +68,19 @@ pub fn get_all_notes(conn: &Connection) -> Result<Vec<Note>> {
         notes.push(note?);
     }
     Ok(notes)
+}
+
+pub fn get_note_by_id(conn: &Connection, id: i32) -> Result<Note> {
+    conn.query_row(
+        "SELECT id, title, content, date FROM notes WHERE id = ?1",
+        [id],
+        |row| {
+            Ok(Note {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                content: row.get(2)?,
+                date: row.get(3)?,
+            })
+        },
+    )
 }
