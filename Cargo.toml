@@ -1,10 +1,11 @@
 [package]
 name = "hypr-notes"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 gtk4 = "0.9"
 rusqlite = "0.31"
 dirs = "5.0"
+chrono = "0.4"
 

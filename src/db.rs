@@ -1,6 +1,15 @@
 use rusqlite::{Connection, Result};
 use std::fs;
 use std::path::PathBuf;
+use chrono;
+
+#[derive(Debug)]
+pub struct Note {
+    pub id: i32,
+    pub title: String,
+    pub content: String,
+    pub date: String,
+}
 
 pub fn setup_db() -> Result<Connection> {
     // 1. Determine where to save the file (~/.local/share/hyprnotes/)
@@ -28,4 +37,15 @@ pub fn setup_db() -> Result<Connection> {
     )?;
 
     Ok(conn)
+}
+
+// Ensure "pub" is here
+pub fn insert_note(conn: &rusqlite::Connection, title: &str, content: &str) -> rusqlite::Result<()> {
+    let current_date = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    
+    conn.execute(
+        "INSERT INTO notes (title, content, date) VALUES (?1, ?2, ?3)",
+        (title, content, current_date),
+    )?;
+    Ok(())
 }

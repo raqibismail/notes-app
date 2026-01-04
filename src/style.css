@@ -1,0 +1,8 @@
+textview {
+    border-radius: 10px;
+}
+
+/* This targets the internal text area */
+textview text {
+    background-color: transparent;
+}
