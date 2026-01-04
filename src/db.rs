@@ -1,5 +1,5 @@
 use chrono;
-use rusqlite::{Connection, Result};
+use rusqlite::{params, Connection, Result};
 use std::fs;
 use std::path::PathBuf;
 
@@ -11,76 +11,68 @@ pub struct Note {
     pub date: String,
 }
 
+const CREATE_TABLE_SQL: &str = "
+    CREATE TABLE IF NOT EXISTS notes (
+        id      INTEGER PRIMARY KEY,
+        title   TEXT NOT NULL,
+        content TEXT NOT NULL,
+        date    TEXT NOT NULL
+    )";
+
+const SELECT_ALL_SQL: &str = "SELECT id, title, content, date FROM notes ORDER BY id DESC";
+const SELECT_BY_ID_SQL: &str = "SELECT id, title, content, date FROM notes WHERE id = ?1";
+
 pub fn setup_db() -> Result<Connection> {
-    // 1. Determine where to save the file (~/.local/share/hyprnotes/)
     let mut data_dir = dirs::data_dir().unwrap_or_else(|| PathBuf::from("./"));
     data_dir.push("hyprnotes");
 
-    // 2. Create the directory if it doesn't exist
     fs::create_dir_all(&data_dir).expect("Could not create data directory");
     data_dir.push("notes.db");
 
-    // 3. Connect (this creates the file if it's missing)
     let conn = Connection::open(data_dir)?;
-
-    // 4. Create the table using SQL
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS notes (
-            id      INTEGER PRIMARY KEY,
-            title   TEXT NOT NULL,
-            content TEXT NOT NULL,
-            date    TEXT NOT NULL
-        )",
-        (),
-    )?;
+    conn.execute(CREATE_TABLE_SQL, [])?;
 
     Ok(conn)
 }
 
-pub fn insert_note(
-    conn: &rusqlite::Connection,
-    title: &str,
-    content: &str,
-) -> rusqlite::Result<()> {
-    let current_date = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-
+pub fn insert_note(conn: &Connection, title: &str, content: &str) -> Result<()> {
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     conn.execute(
         "INSERT INTO notes (title, content, date) VALUES (?1, ?2, ?3)",
-        (title, content, current_date),
+        params![title, content, now],
     )?;
     Ok(())
 }
 
 pub fn get_all_notes(conn: &Connection) -> Result<Vec<Note>> {
-    let mut stmt = conn.prepare("SELECT id, title, content, date FROM notes ORDER BY id DESC")?;
+    let mut stmt = conn.prepare(SELECT_ALL_SQL)?;
+    let note_iter = stmt.query_map([], map_row_to_note)?;
 
-    let note_iter = stmt.query_map([], |row| {
-        Ok(Note {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            content: row.get(2)?,
-            date: row.get(3)?,
-        })
-    })?;
-
-    let mut notes = Vec::new();
-    for note in note_iter {
-        notes.push(note?);
-    }
-    Ok(notes)
+    note_iter.collect()
 }
 
 pub fn get_note_by_id(conn: &Connection, id: i32) -> Result<Note> {
-    conn.query_row(
-        "SELECT id, title, content, date FROM notes WHERE id = ?1",
-        [id],
-        |row| {
-            Ok(Note {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                content: row.get(2)?,
-                date: row.get(3)?,
-            })
-        },
-    )
+    conn.query_row(SELECT_BY_ID_SQL, [id], map_row_to_note)
+}
+
+pub fn update_note(conn: &Connection, id: i32, title: &str, content: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE notes SET title = ?1, content = ?2 WHERE id = ?3",
+        params![title, content, id],
+    )?;
+    Ok(())
+}
+
+pub fn delete_note(conn: &Connection, id: i32) -> Result<()> {
+    conn.execute("DELETE FROM notes WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+fn map_row_to_note(row: &rusqlite::Row) -> Result<Note> {
+    Ok(Note {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        content: row.get(2)?,
+        date: row.get(3)?,
+    })
 }
